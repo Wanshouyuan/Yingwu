@@ -1,4 +1,8 @@
-"""Launch the server with uvicorn. Used by the desktop GUI sidecar and `openworker-server`."""
+"""
+Launch the server with uvicorn. Used by the desktop GUI sidecar and `yingwu-server`.
+    
+使用 uvicorn 启动服务器：既可作为桌面 GUI 的伴随进程运行，也可通过 `yingwu-server` 命令独立启动。
+"""
 
 from __future__ import annotations
 
@@ -16,12 +20,13 @@ from .manager import SessionManager
 
 
 def _exit_when_orphaned() -> None:
-    """When launched as a desktop sidecar (`COWORKER_EXIT_WITH_PARENT=1`), exit if the parent
+    """
+    When launched as a desktop sidecar (`YINGWU_EXIT_WITH_PARENT=1`), exit if the parent
     process dies — even on an abrupt kill (e.g. the Tauri dev watcher restarting the app, or a
-    crash) that skips the shell's graceful child-kill. Standalone `openworker-server` runs are
+    crash) that skips the shell's graceful child-kill. Standalone `yingwu-server` runs are
     unaffected.
 
-    The GUI passes its own PID in `COWORKER_PARENT_PID`. Watching that explicit PID (not
+    The GUI passes its own PID in `YINGWU_PARENT_PID`. Watching that explicit PID (not
     getppid) is what makes this work under PyInstaller onefile, where this process is a
     *grandchild* of the GUI — the bootloader sits in between, so getppid() points at the
     bootloader and a re-parenting check never fires when the GUI dies (the bug that leaked
@@ -29,13 +34,37 @@ def _exit_when_orphaned() -> None:
 
     POSIX: poll the PID with kill(pid, 0). Windows: no re-parenting semantics at all, so
     block on a process handle and exit the moment it signals (i.e. the parent exited).
+
+    服务器跟随"宿主进程"一起存亡（仅在作为桌面 sidecar 启动时生效，`YINGWU_EXIT_WITH_PARENT=1`）。
+
+    背景：这个服务器有两种跑法：
+      1. 被桌面 App（GUI）带起来，当个"跟班"用；
+      2. 独立启动（openworker-server），自己单独跑。
+
+    要解决的问题：跟班模式下，App 一死服务器必须跟着死。否则每次关掉 App，
+    都会在后台漏下一个没人管的服务器进程（老 bug，每次退出都泄漏一对）。
+
+    为什么不能直接问操作系统"我爹是谁"（getppid()）？
+    因为 App 用 PyInstaller onefile 打包后，中间隔了一层引导加载器（bootloader），
+    服务器的"亲爹"其实是这层引导程序，不是 App。App 死了，服务器这边啥都感觉不到，
+    这就是当年泄漏的根源。
+
+    现在的做法：App 把自己的 PID 通过环境变量 YINGWU_PARENT_PID 告诉服务器，
+    服务器只认这个明确的 PID，不去信 getppid()。
+
+    怎么盯：
+      - POSIX（Linux/macOS）：循环用 kill(pid, 0) 探一下这个 PID 还在不在，不在了就退出；
+      - Windows：没有"重新挂靠"这套机制，直接攥住 App 的进程句柄，句柄一发出
+        "进程已退出"的信号就立刻退出。
+
+    注意：独立启动的 yingwu-server 不设这个环境变量，完全不受影响，照常运行。
     """
-    if os.environ.get("COWORKER_EXIT_WITH_PARENT") != "1":
+    if os.environ.get("YINGWU_EXIT_WITH_PARENT") != "1":
         return
     import threading
 
     try:
-        parent = int(os.environ.get("COWORKER_PARENT_PID") or 0)
+        parent = int(os.environ.get("YINGWU_PARENT_PID") or 0)
     except ValueError:
         parent = 0
     parent = parent or os.getppid()  # standalone fallback: our direct spawner
