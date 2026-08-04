@@ -1,6 +1,6 @@
 """
 Launch the server with uvicorn. Used by the desktop GUI sidecar and `yingwu-server`.
-    
+
 使用 uvicorn 启动服务器：既可作为桌面 GUI 的伴随进程运行，也可通过 `yingwu-server` 命令独立启动。
 """
 
@@ -94,7 +94,8 @@ def _exit_when_orphaned() -> None:
 
 
 def _watch_parent_windows(parent: int) -> None:
-    """Block on a handle to the parent process; exit only when it actually terminates.
+    """
+    Block on a handle to the parent process; exit only when it actually terminates.
 
     Best-effort — any failure leaves the parent's RunEvent::ExitRequested kill as the primary
     cleanup path. Two correctness points that bit us before:
@@ -102,7 +103,8 @@ def _watch_parent_windows(parent: int) -> None:
         which truncates the handle to garbage. Declare restype/argtypes so the handle is valid.
       - Only `os._exit` on WAIT_OBJECT_0 (the parent genuinely died). A bad handle yields
         WAIT_FAILED immediately — treating that as "parent died" would kill a perfectly healthy
-        server seconds after startup (exactly the freeze we saw)."""
+        server seconds after startup (exactly the freeze we saw).
+    """
     import ctypes
     import threading
     from ctypes import wintypes
@@ -139,10 +141,16 @@ def build_app(workspace: str | None, model: str, mode: str):
 
 
 def _ensure_ca_bundle() -> None:
-    """Point SSL at certifi's CA bundle if the interpreter has none configured. macOS framework
+    """
+    Point SSL at certifi's CA bundle if the interpreter has none configured. macOS framework
     Python ships without a usable system trust store for `aiohttp` (it builds an `ssl` context with
     no CAs), so the Slack Socket-Mode client fails with CERTIFICATE_VERIFY_FAILED. `httpx`/`requests`
     bundle certifi already; aiohttp honours the SSL_CERT_FILE env var, so set it once at startup.
+
+    如果解释器没有配置任何 CA 证书，就将 SSL 指向 certifi 的 CA 证书包。
+    macOS 框架版 Python 没有为 aiohttp 随附可用的系统信任库（它构建的 ssl 上下文不含任何 CA），
+    因此 Slack Socket 模式客户端会以 CERTIFICATE_VERIFY_FAILED 失败。
+    httpx/requests 已经捆绑了 certifi；而 aiohttp 遵循 SSL_CERT_FILE 环境变量，所以在启动时设置一次即可。
     """
     if os.environ.get("SSL_CERT_FILE"):
         return
@@ -155,11 +163,15 @@ def _ensure_ca_bundle() -> None:
 
 
 def _ensure_api_token(port: int) -> Path | None:
-    """Set launch auth; standalone/dev tokens use a user-only, port-specific file."""
-    if os.environ.get("COWORKER_API_TOKEN"):
+    """
+    Set launch auth; standalone/dev tokens use a user-only, port-specific file.
+
+    设置启动时的认证（launch auth）；独立/开发用的令牌存放在一个仅当前用户可读写、且按端口区分的文件中。
+    """
+    if os.environ.get("YINGWU_API_TOKEN"):
         return None  # Tauri supplied an in-memory token; never persist it.
     token = secrets.token_hex(32)
-    os.environ["COWORKER_API_TOKEN"] = token
+    os.environ["YINGWU_API_TOKEN"] = token
     return write_private_text(
         state_dir() / f"sidecar-{port}.token", token + "\n"
     )
@@ -184,7 +196,7 @@ def main(argv=None) -> None:
     # target this process, not config.port. The desktop shell runs the sidecar on
     # a random free port (to coexist with a hand-run server on 8765), so the
     # managed-connect redirect must follow the real port, not the 8765 default.
-    os.environ["COWORKER_PORT"] = str(args.port)
+    os.environ["YINGWU_PORT"] = str(args.port)
     generated_token_path = _ensure_api_token(args.port)
     try:
         import uvicorn
