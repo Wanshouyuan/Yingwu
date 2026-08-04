@@ -180,7 +180,7 @@ def _ensure_api_token(port: int) -> Path | None:
 def main(argv=None) -> None:
     _ensure_ca_bundle()
     cfg = load_config()  # global config supplies defaults
-    parser = argparse.ArgumentParser(prog="openworker-server")
+    parser = argparse.ArgumentParser(prog="yingwu-server")
     parser.add_argument("--cwd", default=None, help="optional seed/default workspace")
     parser.add_argument("--model", default=cfg.model)
     parser.add_argument(
@@ -209,7 +209,7 @@ def main(argv=None) -> None:
     finally:
         if generated_token_path is not None:
             generated_token_path.unlink(missing_ok=True)
-            os.environ.pop("COWORKER_API_TOKEN", None)
+            os.environ.pop("YINGWU_API_TOKEN", None)
 
 
 if __name__ == "__main__":
